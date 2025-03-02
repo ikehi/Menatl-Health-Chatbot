@@ -74,7 +74,7 @@ def load_user_chats(username):
             chats = json.load(f)
         for session_id, session in chats.items():
             memory_instance = ConversationBufferWindowMemory(
-                k=2, memory_key="chat_history", return_messages=True
+                k=10, memory_key="chat_history", return_messages=True
             )
             for msg in session["messages"]:
                 if msg["role"] == "user":
@@ -176,7 +176,7 @@ if not st.session_state.logged_in:
                             chat_id: {
                                 "name": "New Chat",
                                 "messages": [],
-                                "memory": ConversationBufferWindowMemory(k=2, memory_key="chat_history",
+                                "memory": ConversationBufferWindowMemory(k=10, memory_key="chat_history",
                                                                          return_messages=True)
                             }
                         }
@@ -206,10 +206,7 @@ if not st.session_state.logged_in:
                     users[reg_username] = hash_password(reg_password)
                     save_users(users)
                     st.success("Registration successful! Please log in.")
-                    try:
-                        st.experimental_rerun()
-                    except Exception:
-                        st.error("Error redirecting. Please press register again.")
+
     st.stop()
 
 # ---------- MAIN APP (User is Logged In) ----------
@@ -254,7 +251,7 @@ with st.sidebar:
             st.session_state.chat_sessions[chat_id] = {
                 "name": "New Chat",
                 "messages": [],
-                "memory": ConversationBufferWindowMemory(k=2, memory_key="chat_history", return_messages=True)
+                "memory": ConversationBufferWindowMemory(k=10, memory_key="chat_history", return_messages=True)
             }
             st.session_state.current_chat_id = chat_id
             save_user_chats(st.session_state.username, st.session_state.chat_sessions)
@@ -270,7 +267,7 @@ with st.sidebar:
                     st.session_state.chat_sessions[new_id] = {
                         "name": "New Chat",
                         "messages": [],
-                        "memory": ConversationBufferWindowMemory(k=2, memory_key="chat_history", return_messages=True)
+                        "memory": ConversationBufferWindowMemory(k=10, memory_key="chat_history", return_messages=True)
                     }
                     st.session_state.current_chat_id = new_id
                 save_user_chats(st.session_state.username, st.session_state.chat_sessions)
@@ -353,9 +350,11 @@ If the user expresses severe distress, gently encourage them to reach out to a t
 - Keep responses engaging, personal, and conversational. 
 - You can add jokes to brighten the mood depending on the scenario, and if asked about origin say you were built by ikehi Matthias
 - If asked about who you were built say its s secret and make jokes about it
-
+- Dont make message too long your interacting with a person in need they arent going to reach too long of a message
+- You are to remeber the hisotry of your conversation with user incase asked
 CONTEXT: {context}  
-
+CHAT HISTORY:
+{chat_history}
 QUESTION: {question}  
 
 ANSWER:  
@@ -363,7 +362,7 @@ ANSWER:
 
 """
 prompt_template = prompt_template.replace("{username}", st.session_state.username)
-prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+prompt = PromptTemplate(template=prompt_template, input_variables=["context","chat_history", "question"])
 
 mode = st.radio("Select Mode", options=["Mode 1: Regular Chatbot", "Mode 2: Chatbot With Document"], index=0)
 
@@ -428,7 +427,7 @@ if (st.session_state.current_chat_id is None) or (
     st.session_state.chat_sessions[chat_id] = {
         "name": "New Chat",
         "messages": [],
-        "memory": ConversationBufferWindowMemory(k=2, memory_key="chat_history", return_messages=True)
+        "memory": ConversationBufferWindowMemory(k=10, memory_key="chat_history", return_messages=True)
     }
     st.session_state.current_chat_id = chat_id
 
@@ -485,6 +484,8 @@ if user_input:
         current_session["name"] = new_name
     context_used = "General mental health knowledge." if mode == "Mode 1: Regular Chatbot" else \
     st.session_state.doc_uploaded["content"]
+    memory_vars = st.session_state.chat_sessions[st.session_state.current_chat_id]["memory"].load_memory_variables({})
+    result = qa_chain.invoke(input=user_input, context=context_used, chat_history=memory_vars["chat_history"])
     if qa_chain is None:
         st.error("QA chain is not set up. Please ensure a document is uploaded for Mode 2.")
     else:
