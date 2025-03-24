@@ -93,7 +93,7 @@ streamlit run app.py
 
 MindCareAI is also deployed on Streamlit Cloud. You can access the chatbot directly via the following link:
 
-➡️ MindCareAI Streamlit https://justiceal.streamlit.app/
+➡️ MindCareAI Streamlit [https://justiceal.streamlit.app/](https://serenitybot.streamlit.app/)
 
 
 
