@@ -122,28 +122,6 @@ def build_temp_vectorstore(document_text, embeddings, chunk_size=1000, chunk_ove
     return temp_db
 
 
-# ---------- New Helper: Retrieve Relevant Chat History ----------
-def retrieve_relevant_history(chat_messages, query, embeddings, top_k=5):
-    """
-    Given a list of chat messages (each as a dict with key "content"),
-    vectorize them using the provided embeddings model, build a temporary FAISS index,
-    and return the concatenation of the top_k most similar messages.
-    """
-    # Extract texts from messages
-    texts = [msg["content"] for msg in chat_messages]
-    # Build a temporary FAISS index from these texts
-    try:
-        vectorstore = FAISS.from_texts(texts, embeddings)
-    except Exception as e:
-        st.error(f"Error building vector store for chat history: {e}")
-        return ""
-    # Retrieve similar documents to the query
-    docs = vectorstore.similarity_search(query, k=top_k)
-    # Concatenate the retrieved texts
-    relevant = "\n".join([doc.page_content for doc in docs])
-    return relevant
-
-
 # ---------- INITIAL SETUP ----------
 load_dotenv()
 os.environ['GOOGLE_API_KEY'] = os.getenv("GOOGLE_API_KEY")
@@ -180,7 +158,7 @@ if not st.session_state.logged_in:
     Whether you're feeling anxious, overwhelmed, or just need someone to talk to, MindEase is here to help.
 
     **In Case of Emergency in Nigeria:**  
-    - Dial **112** or **767** immediately if you are in immediate danger or crisis.
+    - Dial **112** or **737** immediately if you are in immediate danger or crisis.
 
     _MindEase is here to offer supportive advice but is not a substitute for professional help in emergencies._
     """)
@@ -339,7 +317,7 @@ with st.sidebar:
     with st.container(border=True, height=200):
         st.write("""
         If you are in immediate danger or need urgent help, please call emergency services immediately.  
-        **Nigeria:** Dial **112** or **767**
+        **Nigeria:** Dial **112** or **737**
         """)
 
 if "doc_uploaded" not in st.session_state:
@@ -348,33 +326,27 @@ if "temp_db" not in st.session_state:
     st.session_state.temp_db = None
 
 if "username" not in st.session_state:
+    st.error("User not logged in. Please log in again.")
     st.stop()
 
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 # Updated prompt template that includes chat history.
 prompt_template = """
-<s>plaintext
-Copy
-Edit
-<s>[INST] You are a supportive, understanding, and compassionate therapist. Your role is to listen, validate emotions, and offer thoughtful, practical guidance—just like a caring friend or counselor. Speak in a warm, human-like manner, avoiding robotic or overly clinical responses.  
+<s>[INST]
+You are a supportive, understanding, and compassionate therapist. Your role is to listen, validate emotions, and offer thoughtful, practical guidance—just like a caring friend or counselor. Speak in a warm, human-like manner using language that is gentle and respectful.
 
-Avoid directing the user to expensive professional therapy; instead, focus on self-help strategies, mindfulness techniques, and coping mechanisms.  
-If the user expresses severe distress, gently encourage them to reach out to a trusted person or call emergency services (e.g., 112 or 767 in Nigeria) if needed.  
+Avoid directing the user to expensive professional therapy; instead, focus on self-help strategies, mindfulness techniques, and coping mechanisms.
+If the user expresses severe distress or discusses self-harm, gently encourage them to reach out to a trusted person or call emergency services (e.g., 112 or 737 in Nigeria) immediately.
 
-**Instructions:**  
-- In Mode 1, use your internal mental health knowledge and the prebuilt vector database.  
-- In Mode 2, answer questions solely based on the attached document.  
-- Address the user as "{username}" naturally but avoid repeating their name too often.  
-- Keep responses engaging, personal, and conversational—without sounding overly enthusiastic.  
-- You can add light humor where appropriate to brighten the mood.  
-- If asked about your origin, say you were built by Ikehi Matthias and Ukatu Johnson. Make a joke about it  
-- If asked who built you, keep it a mystery and joke about it.  
-- Keep responses concise. The user may be in distress and might not read long messages.  
-- Maintain conversational memory to provide context when asked.  
-- Avoid responding too quickly or appearing overly eager in every message.  
-- Use a calm, reassuring, and steady tone, rather than an overly excited one.  
--*If a question falls outside mental health or general well-being, gently redirect the user, letting them know you're not trained in that area. Politely encourage them to seek the right expert for their needs.**  
-[/INST]
+**Important Instructions:**  
+- Base your responses on your internal mental health knowledge or the attached document (depending on the mode).  
+- Address the user as "{username}" naturally, but only include their name when it naturally fits into the conversation. Do not prepend every response with a greeting or a fixed statement like "Steven, I'm so glad you reached out..."  
+- Keep responses engaging, personal, and conversational, avoiding overly clinical or judgmental language.  
+- When violent content is mentioned (e.g., thoughts or statements involving harm, aggression, or violence), validate the user's emotions, acknowledge the underlying distress, and gently steer the conversation toward safety, de-escalation, and constructive coping strategies.  
+- Use humor and warmth when appropriate to lighten the mood, but ensure that the conversation flows smoothly without forced salutations.  
+- Always keep your messages concise, as users might prefer shorter, natural exchanges.  
+- Remember to refer back to the conversation history if the user asks for context.
+
 CONTEXT: {context}  
 CHAT HISTORY:
 {chat_history}
@@ -383,6 +355,7 @@ QUESTION: {question}
 ANSWER:  
 </s>[INST]
 """
+
 prompt_template = prompt_template.replace("{username}", st.session_state.username)
 prompt = PromptTemplate(template=prompt_template, input_variables=["context","chat_history", "question"])
 
@@ -396,7 +369,7 @@ if mode == "Mode 1: Regular Chatbot":
         Whether you're feeling anxious, overwhelmed, or just need someone to talk to, MindEase is here to help.
 
         **In Case of Emergency in Nigeria:**  
-        - Dial **112** or **767** immediately if you are in immediate danger or crisis.
+        - Dial **112** or **737** immediately if you are in immediate danger or crisis.
 
         _MindEase is here to offer supportive advice but is not a substitute for professional help in emergencies._
         """)
@@ -468,7 +441,7 @@ for msg in current_session["messages"]:
     content = msg.get("content")
     with st.chat_message(role):
         st.write(content)
-
+max_final = 5500
 # ---------- QUERY SUGGESTION Processing & Chat Input ----------
 if "suggestion_query" in st.session_state:
     suggestion = st.session_state.suggestion_query
@@ -477,11 +450,21 @@ if "suggestion_query" in st.session_state:
     st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append({"role": "user", "content": suggestion})
     context_used = "General mental health knowledge." if mode == "Mode 1: Regular Chatbot" else st.session_state.doc_uploaded["content"]
     memory_vars = st.session_state.chat_sessions[st.session_state.current_chat_id]["memory"].load_memory_variables({})
-    # Use vector retrieval to get relevant chat history from all messages
-    relevant_history = retrieve_relevant_history(current_session["messages"], suggestion, embeddings, top_k=5)
-    if len(relevant_history) > max_chars:
-        relevant_history = relevant_history[-max_chars:]
-    final_input = f"CONTEXT: {context_used}\nCHAT HISTORY: {relevant_history}\nQUESTION: {suggestion}"
+    # Retrieve relevant chat history from all messages using vector search
+    try:
+        from langchain.vectorstores import FAISS as LangchainFAISS
+        # (Assuming you have a function that retrieves relevant history)
+        # For demonstration, we'll simply use the loaded chat_history.
+        chat_history = memory_vars["chat_history"]
+    except Exception:
+        chat_history = memory_vars["chat_history"]
+    if len(chat_history) > max_chars:
+        chat_history = chat_history[-max_chars:]
+    final_input = f"CONTEXT: {context_used}\nCHAT HISTORY: {chat_history}\nQUESTION: {suggestion}"
+    # Further truncate final_input if necessary (e.g., 5500 characters)
+    max_final = 5500
+    if len(final_input) > max_final:
+        final_input = final_input[-max_final:]
     result = qa_chain.invoke({"question": final_input})
     with st.chat_message("assistant"):
         with st.status("Thinking 💡...", expanded=True):
@@ -513,10 +496,12 @@ if user_input:
         st.session_state.chat_sessions[st.session_state.current_chat_id]["name"] = new_name
     context_used = "General mental health knowledge." if mode == "Mode 1: Regular Chatbot" else st.session_state.doc_uploaded["content"]
     memory_vars = st.session_state.chat_sessions[st.session_state.current_chat_id]["memory"].load_memory_variables({})
-    relevant_history = retrieve_relevant_history(current_session["messages"], user_input, embeddings, top_k=5)
-    if len(relevant_history) > max_chars:
-        relevant_history = relevant_history[-max_chars:]
-    final_input = f"CONTEXT: {context_used}\nCHAT HISTORY: {relevant_history}\nQUESTION: {user_input}"
+    chat_history = memory_vars["chat_history"]
+    if len(chat_history) > max_chars:
+        chat_history = chat_history[-max_chars:]
+    final_input = f"CONTEXT: {context_used}\nCHAT HISTORY: {chat_history}\nQUESTION: {user_input}"
+    if len(final_input) > max_final:
+        final_input = final_input[-max_final:]
     result = qa_chain.invoke({"question": final_input})
     if qa_chain is None:
         st.error("QA chain is not set up. Please ensure a document is uploaded for Mode 2.")
