@@ -122,6 +122,32 @@ def build_temp_vectorstore(document_text, embeddings, chunk_size=1000, chunk_ove
     return temp_db
 
 
+# ---------- NEW HELPER: safe_invoke for Exponential Backoff ----------
+def safe_invoke(chain, payload, max_retries=5, initial_delay=10):
+    """Call the chain's invoke method with exponential backoff retry logic.
+       If a rate limit error (or 'request too large') is detected, wait before retrying.
+    """
+    delay = initial_delay
+    for attempt in range(max_retries):
+        try:
+            result = chain.invoke(payload)
+            # If the result includes token usage, you can log or display it:
+            if isinstance(result, dict) and "token_usage" in result:
+                st.info(f"Token usage: {result['token_usage']}")
+            return result
+        except Exception as e:
+            # Check if the error message indicates a rate limit or size issue.
+            error_message = str(e)
+            if "rate_limit_exceeded" in error_message or "Request too large" in error_message:
+                st.warning(
+                    f"Rate limit error encountered. Waiting {delay} seconds before retrying (Attempt {attempt + 1} of {max_retries})...")
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
+            else:
+                raise e
+    raise Exception("Max retries exceeded. Please reduce your request size or try again later.")
+
+
 # ---------- INITIAL SETUP ----------
 load_dotenv()
 os.environ['GOOGLE_API_KEY'] = os.getenv("GOOGLE_API_KEY")
@@ -158,7 +184,7 @@ if not st.session_state.logged_in:
     Whether you're feeling anxious, overwhelmed, or just need someone to talk to, MindEase is here to help.
 
     **In Case of Emergency in Nigeria:**  
-    - Dial **112** or **737** immediately if you are in immediate danger or crisis.
+    - Dial **112** or **199** immediately if you are in immediate danger or crisis.
 
     _MindEase is here to offer supportive advice but is not a substitute for professional help in emergencies._
     """)
@@ -180,7 +206,8 @@ if not st.session_state.logged_in:
                             chat_id: {
                                 "name": "New Chat",
                                 "messages": [],
-                                "memory": ConversationBufferWindowMemory(k=10, memory_key="chat_history", return_messages=True)
+                                "memory": ConversationBufferWindowMemory(k=10, memory_key="chat_history",
+                                                                         return_messages=True)
                             }
                         }
                         st.session_state.current_chat_id = chat_id
@@ -230,7 +257,8 @@ with st.sidebar:
     if "chat_sessions" not in st.session_state:
         st.session_state.chat_sessions = {}
     if "current_chat_id" not in st.session_state:
-        st.session_state.current_chat_id = list(st.session_state.chat_sessions.keys())[0] if st.session_state.chat_sessions else None
+        st.session_state.current_chat_id = list(st.session_state.chat_sessions.keys())[
+            0] if st.session_state.chat_sessions else None
 
     session_ids = list(st.session_state.chat_sessions.keys())
     session_names = {sid: st.session_state.chat_sessions[sid]["name"] for sid in session_ids}
@@ -239,7 +267,8 @@ with st.sidebar:
             "Select a session",
             options=session_ids,
             format_func=lambda sid: session_names[sid],
-            index=session_ids.index(st.session_state.current_chat_id) if st.session_state.current_chat_id in session_ids else 0
+            index=session_ids.index(
+                st.session_state.current_chat_id) if st.session_state.current_chat_id in session_ids else 0
         )
         st.session_state.current_chat_id = selected_session
     col_new, col_del = st.columns(2)
@@ -290,7 +319,8 @@ with st.sidebar:
         if st.button("Save Journal Entry", key="save_journal"):
             if "journal_entries" not in st.session_state:
                 st.session_state.journal_entries = []
-            st.session_state.journal_entries.append({"entry": journal_entry, "time": time.strftime("%Y-%m-%d %H:%M:%S")})
+            st.session_state.journal_entries.append(
+                {"entry": journal_entry, "time": time.strftime("%Y-%m-%d %H:%M:%S")})
             st.success("Journal entry saved.")
     st.subheader("Relaxation Exercises")
     with st.container(border=True, height=200):
@@ -312,12 +342,13 @@ with st.sidebar:
         ]
         if st.button("Show Affirmation", key="show_affirmation"):
             import random
+
             st.write(random.choice(affirmations))
     st.subheader("Crisis Support")
     with st.container(border=True, height=200):
         st.write("""
         If you are in immediate danger or need urgent help, please call emergency services immediately.  
-        **Nigeria:** Dial **112** or **737**
+        **Nigeria:** Dial **112** or **199**
         """)
 
 if "doc_uploaded" not in st.session_state:
@@ -357,7 +388,7 @@ ANSWER:
 """
 
 prompt_template = prompt_template.replace("{username}", st.session_state.username)
-prompt = PromptTemplate(template=prompt_template, input_variables=["context","chat_history", "question"])
+prompt = PromptTemplate(template=prompt_template, input_variables=["context", "chat_history", "question"])
 
 mode = st.radio("Select Mode", options=["Mode 1: Regular Chatbot", "Mode 2: Chatbot With Document"], index=0)
 
@@ -369,7 +400,7 @@ if mode == "Mode 1: Regular Chatbot":
         Whether you're feeling anxious, overwhelmed, or just need someone to talk to, MindEase is here to help.
 
         **In Case of Emergency in Nigeria:**  
-        - Dial **112** or **737** immediately if you are in immediate danger or crisis.
+        - Dial **112** or **199** immediately if you are in immediate danger or crisis.
 
         _MindEase is here to offer supportive advice but is not a substitute for professional help in emergencies._
         """)
@@ -425,7 +456,8 @@ else:
     else:
         qa_chain = None
 
-if (st.session_state.current_chat_id is None) or (st.session_state.current_chat_id not in st.session_state.chat_sessions):
+if (st.session_state.current_chat_id is None) or (
+        st.session_state.current_chat_id not in st.session_state.chat_sessions):
     chat_id = str(uuid.uuid4())
     st.session_state.chat_sessions[chat_id] = {
         "name": "New Chat",
@@ -441,31 +473,26 @@ for msg in current_session["messages"]:
     content = msg.get("content")
     with st.chat_message(role):
         st.write(content)
-max_final = 5500
+
 # ---------- QUERY SUGGESTION Processing & Chat Input ----------
 if "suggestion_query" in st.session_state:
     suggestion = st.session_state.suggestion_query
     with st.chat_message("user"):
         st.write(suggestion)
-    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append({"role": "user", "content": suggestion})
-    context_used = "General mental health knowledge." if mode == "Mode 1: Regular Chatbot" else st.session_state.doc_uploaded["content"]
+    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append(
+        {"role": "user", "content": suggestion})
+    context_used = "General mental health knowledge." if mode == "Mode 1: Regular Chatbot" else \
+    st.session_state.doc_uploaded["content"]
     memory_vars = st.session_state.chat_sessions[st.session_state.current_chat_id]["memory"].load_memory_variables({})
-    # Retrieve relevant chat history from all messages using vector search
-    try:
-        from langchain.vectorstores import FAISS as LangchainFAISS
-        # (Assuming you have a function that retrieves relevant history)
-        # For demonstration, we'll simply use the loaded chat_history.
-        chat_history = memory_vars["chat_history"]
-    except Exception:
-        chat_history = memory_vars["chat_history"]
+    # Retrieve relevant chat history from all messages
+    # Here you could integrate a retrieval function if you had one. For now, we directly use the chat_history.
+    chat_history = memory_vars["chat_history"]
     if len(chat_history) > max_chars:
         chat_history = chat_history[-max_chars:]
     final_input = f"CONTEXT: {context_used}\nCHAT HISTORY: {chat_history}\nQUESTION: {suggestion}"
-    # Further truncate final_input if necessary (e.g., 5500 characters)
-    max_final = 5500
-    if len(final_input) > max_final:
-        final_input = final_input[-max_final:]
-    result = qa_chain.invoke({"question": final_input})
+    if len(final_input) > 5500:
+        final_input = final_input[-5500:]
+    result = safe_invoke(qa_chain, {"question": final_input})
     with st.chat_message("assistant"):
         with st.status("Thinking 💡...", expanded=True):
             full_response = result.get("answer", "I couldn't process your query.")
@@ -473,7 +500,8 @@ if "suggestion_query" in st.session_state:
             for i in range(len(full_response)):
                 message_placeholder.markdown(full_response[:i + 1] + " ▌")
                 time.sleep(0.02)
-    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append({"role": "assistant", "content": result["answer"]})
+    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append(
+        {"role": "assistant", "content": result["answer"]})
     save_user_chats(st.session_state.username, st.session_state.chat_sessions)
     del st.session_state.suggestion_query
 
@@ -489,20 +517,22 @@ if mode == "Mode 2: Chatbot With Document" and st.session_state.doc_uploaded is 
 if user_input:
     with st.chat_message("user"):
         st.write(user_input)
-    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append({"role": "user", "content": user_input})
+    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append(
+        {"role": "user", "content": user_input})
     if st.session_state.chat_sessions[st.session_state.current_chat_id]["name"] == "New Chat":
         words = user_input.split()
         new_name = " ".join(words[:10]) + ("..." if len(words) > 10 else "")
         st.session_state.chat_sessions[st.session_state.current_chat_id]["name"] = new_name
-    context_used = "General mental health knowledge." if mode == "Mode 1: Regular Chatbot" else st.session_state.doc_uploaded["content"]
+    context_used = "General mental health knowledge." if mode == "Mode 1: Regular Chatbot" else \
+    st.session_state.doc_uploaded["content"]
     memory_vars = st.session_state.chat_sessions[st.session_state.current_chat_id]["memory"].load_memory_variables({})
     chat_history = memory_vars["chat_history"]
     if len(chat_history) > max_chars:
         chat_history = chat_history[-max_chars:]
     final_input = f"CONTEXT: {context_used}\nCHAT HISTORY: {chat_history}\nQUESTION: {user_input}"
-    if len(final_input) > max_final:
-        final_input = final_input[-max_final:]
-    result = qa_chain.invoke({"question": final_input})
+    if len(final_input) > 5500:
+        final_input = final_input[-5500:]
+    result = safe_invoke(qa_chain, {"question": final_input})
     if qa_chain is None:
         st.error("QA chain is not set up. Please ensure a document is uploaded for Mode 2.")
     else:
@@ -513,5 +543,6 @@ if user_input:
                 for i in range(len(full_response)):
                     message_placeholder.markdown(full_response[:i + 1] + " ▌")
                     time.sleep(0.02)
-    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append({"role": "assistant", "content": result["answer"]})
+    st.session_state.chat_sessions[st.session_state.current_chat_id]["messages"].append(
+        {"role": "assistant", "content": result["answer"]})
     save_user_chats(st.session_state.username, st.session_state.chat_sessions)
