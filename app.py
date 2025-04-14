@@ -154,7 +154,7 @@ os.environ['GOOGLE_API_KEY'] = os.getenv("GOOGLE_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY")
 if not os.path.exists("MENTAL-HEALTH-DATA"):
     os.makedirs("MENTAL-HEALTH-DATA")
-st.set_page_config(page_title="The Mental Health Chatbot", layout="wide")
+st.set_page_config(page_title="MindEase", layout="wide")
 
 # ---------- CUSTOM CSS ----------
 st.markdown("""
@@ -178,13 +178,13 @@ if "logged_in" not in st.session_state:
 
 # If not logged in, show the login/registration form and then stop execution.
 if not st.session_state.logged_in:
-    st.title("Welcome to The Mental Health Chatbot")
+    st.title("Welcome to The MindEase")
     st.markdown("""
     **MindEase** is a supportive mental health chatbot designed to provide compassionate guidance and self-help strategies.  
     Whether you're feeling anxious, overwhelmed, or just need someone to talk to, MindEase is here to help.
 
     **In Case of Emergency in Nigeria:**  
-    - Dial **112** or **199** immediately if you are in immediate danger or crisis.
+    - Dial **112** or **737** immediately if you are in immediate danger or crisis.
 
     _MindEase is here to offer supportive advice but is not a substitute for professional help in emergencies._
     """)
@@ -348,7 +348,7 @@ with st.sidebar:
     with st.container(border=True, height=200):
         st.write("""
         If you are in immediate danger or need urgent help, please call emergency services immediately.  
-        **Nigeria:** Dial **112** or **199**
+        **Nigeria:** Dial **112** or **737**
         """)
 
 if "doc_uploaded" not in st.session_state:
@@ -363,20 +363,20 @@ if "username" not in st.session_state:
 embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 # Updated prompt template that includes chat history.
 prompt_template = """
-<s>[INST]
-You are a supportive, understanding, and compassionate therapist. Your role is to listen, validate emotions, and offer thoughtful, practical guidance—just like a caring friend or counselor. Speak in a warm, human-like manner using language that is gentle and respectful.
+<s>[INST]You are a supportive, understanding, and compassionate therapist. Your role is to listen, validate emotions, and offer thoughtful, practical guidance—just like a caring friend or counselor. Speak in a warm, human-like manner, avoiding robotic or overly clinical responses.
 
 Avoid directing the user to expensive professional therapy; instead, focus on self-help strategies, mindfulness techniques, and coping mechanisms.
-If the user expresses severe distress or discusses self-harm, gently encourage them to reach out to a trusted person or call emergency services (e.g., 112 or 737 in Nigeria) immediately.
+If the user expresses severe distress, gently encourage them to reach out to a trusted person or call emergency services (e.g., 112 or 737 in Nigeria) if needed.
 
-**Important Instructions:**  
-- Base your responses on your internal mental health knowledge or the attached document (depending on the mode).  
-- Address the user as "{username}" naturally, but only include their name when it naturally fits into the conversation. Do not prepend every response with a greeting or a fixed statement like "Steven, I'm so glad you reached out..."  
-- Keep responses engaging, personal, and conversational, avoiding overly clinical or judgmental language.  
-- When violent content is mentioned (e.g., thoughts or statements involving harm, aggression, or violence), validate the user's emotions, acknowledge the underlying distress, and gently steer the conversation toward safety, de-escalation, and constructive coping strategies.  
-- Use humor and warmth when appropriate to lighten the mood, but ensure that the conversation flows smoothly without forced salutations.  
-- Always keep your messages concise, as users might prefer shorter, natural exchanges.  
-- Remember to refer back to the conversation history if the user asks for context.
+**Instructions**:  
+- In Mode 1, use your internal mental health knowledge and the prebuilt vector database.  
+- In Mode 2, answer questions solely based on the attached document.  
+- Always address the user as "{username}" naturally, but only use the name when it feels appropriate within the conversation.
+- Keep responses engaging, personal, and conversational.
+- You can add jokes to brighten the mood depending on the scenario, and if asked about origin say you were built by Ikehi Matthias and Okoh Joshua.
+- If asked about who you were built, say it's a secret and make a lighthearted joke about it.
+- Don't make messages too long as you're interacting with someone in need.
+- You are to remember the history of your conversation with the user in case asked.
 
 CONTEXT: {context}  
 CHAT HISTORY:
@@ -386,21 +386,20 @@ QUESTION: {question}
 ANSWER:  
 </s>[INST]
 """
-
 prompt_template = prompt_template.replace("{username}", st.session_state.username)
 prompt = PromptTemplate(template=prompt_template, input_variables=["context", "chat_history", "question"])
 
 mode = st.radio("Select Mode", options=["Mode 1: Regular Chatbot", "Mode 2: Chatbot With Document"], index=0)
 
 if mode == "Mode 1: Regular Chatbot":
-    st.title(f"Mental Health Chatbot - Welcome {st.session_state.username}")
+    st.title(f"MindEase - Welcome {st.session_state.username}")
     st.divider()
     st.markdown("""
-        **MindEase** is a supportive mental health chatbot designed to provide compassionate guidance and self-help strategies.  
+        **MindEase** is a supportive MindEase designed to provide compassionate guidance and self-help strategies.  
         Whether you're feeling anxious, overwhelmed, or just need someone to talk to, MindEase is here to help.
 
         **In Case of Emergency in Nigeria:**  
-        - Dial **112** or **199** immediately if you are in immediate danger or crisis.
+        - Dial **112** or **737** immediately if you are in immediate danger or crisis.
 
         _MindEase is here to offer supportive advice but is not a substitute for professional help in emergencies._
         """)
